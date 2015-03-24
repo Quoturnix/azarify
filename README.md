@@ -1,4 +1,4 @@
-# coqney
+# Azarify
 Easter Egg language processor. Teach your userbase to speak French automagically. 
 
 ## How does it work?
@@ -11,7 +11,7 @@ Make sure you have Lua 5+ installed. You proably do though.
 
 ## Usage
 ```
-./conqney [-q|-s|-v] [-g|-p] \
+./azarify [-q|-s|-v] [-g|-p] \
     [-o output-file] [-f frequencies-file] \
     [-i [input-file] [rules-file] 
 ```

@@ -10,6 +10,40 @@ rulefile="anglofrench"
 instream=io.stdin
 outstream=io.stdout
 
+-- Output code templates
+codetempl_header=[[
+/* THIS FILE IS GENERATED AUTOMATICALLY BY AZARIFY AND NOT INTENDED FOR MANUAL MODIFICATION
+ * As a matter of fact, don't read it either, it will haunt you at night.
+ * You have been warned.
+ */
+#include <string.h>
+#include <stdlib.h>
+
+]]
+
+codetemp_footer=[[
+/* TODO: only basic Latin and apostrophe supported so far */
+static size_t lettertrans(char c)
+{
+    if (c=='\'')
+        return 1;
+    if (c>='A' && c<='Z')
+        return (size_t)(c-'A');
+    if (c>='a' && c<='z')
+        return (size_t)(c-'a');
+    return 0;
+}
+
+void azarify_process_buffer(char *buf, size_t n)
+{
+    char *out=malloc(n);
+    
+    memcpy(buf,out,n)
+    free(out);
+}
+
+]]
+
 -- Processing mode
 function processing(instring)
     local words_number=0
@@ -47,6 +81,8 @@ function processing(instring)
 end
 
 -- Generation mode
+function generation()
+end
 
 -- Analyze params
 -- TODO: various checks not to drop in Lua errors
@@ -111,7 +147,7 @@ if operation_mode=='p' then
         fp:close()
     end
 else
-    
+    outstream:write(codetempl_header..codetemp_footer)    
 end
 
 -- Close streams if necessary
