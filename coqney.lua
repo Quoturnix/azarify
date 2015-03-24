@@ -1,21 +1,14 @@
 #!/usr/bin/env lua
 
--- TODO: process param
-require("anglofrench")
-
--- Building the uppercase version of the words filter
-new_words={}
-for k,v in pairs(words) do
-    new_words[string.upper(string.sub(k,1,1))..string.sub(k,2,string.len(k))]=
-        string.upper(string.sub(v,1,1))..string.sub(v,2,string.len(v))
-    new_words[k]=v
-end
-words=new_words
-
 -- Defaults
 operation_mode='p'
 verbosity='v'
 freqfile=nil
+infile=nil
+outfile=nil
+rulefile="anglofrench"
+instream=io.stdin
+outstream=io.stdout
 
 -- Processing mode
 function processing(instring)
@@ -56,13 +49,52 @@ end
 -- Generation mode
 
 -- Analyze params
+-- TODO: various checks not to drop in Lua errors
+dont_analyse={}
+for i,v in ipairs(arg) do
+    if not dont_analyse[i] then
+        if v=='-p' or v=='-g' then 
+            operation_mode=string.sub(v,2,2)
+        elseif v=="-s" or v=="-q" or v=="-v" then
+            verbosity=string.sub(v,2,2)
+        elseif v=="-f" then
+            dont_analyse[i+1]=true
+            freqfile=arg[i+1]
+        elseif v=="-o" then
+            dont_analyse[i+1]=true
+            outfile=arg[i+1]
+        elseif v=="-i" then
+            dont_analyse[i+1]=true
+            infile=arg[i+1]
+        elseif i==#arg then 
+            rulefile=arg[i]
+        end
+    end
+end
+
+-- Building the uppercase version of the words filter
+require(rulefile)
+new_words={}
+for k,v in pairs(words) do
+    new_words[string.upper(string.sub(k,1,1))..string.sub(k,2,string.len(k))]=
+        string.upper(string.sub(v,1,1))..string.sub(v,2,string.len(v))
+    new_words[k]=v
+end
+words=new_words
 
 -- Open streams
+if infile then 
+    instream=io.open(infile, 'r')
+end
+
+if outfile then
+    outstream=io.open(outfile, 'w')
+end
 
 -- Do things
 if operation_mode=='p' then
-    local output, rate, stat = processing(io.read("*all"))
-    io.write(output)
+    local output, rate, stat = processing(instream:read("*all"))
+    outstream:write(output)
     
     -- Print stats if we need
     if verbosity~="q" then
@@ -80,4 +112,13 @@ if operation_mode=='p' then
     end
 else
     
+end
+
+-- Close streams if necessary
+if infile then
+    infile:close()
+end
+
+if outfile then
+    outfile:close()
 end
