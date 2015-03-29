@@ -25,10 +25,40 @@ codetempl_header=[[
  */
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
 
 ]]
 
 codetemp_footer=[[
+
+static uint64_t azarify_hash_string(const char *buf, size_t start, size_t end)
+{
+    /* TODO: Mersenne prime fast modulo */
+    uint64_t h=buf[end];
+    size_t i;
+    
+    for (i=start+1; i<=end; i++)
+        h=(h*azarify_hash_a + buf[end-i]) % azarify_hash_p;
+    
+    return h;
+}
+
+static const char* azarify_hash_lookup_value(const char *needle, size_t start, size_t end)
+{
+    /* TODO: Maybe select the buckets size from Mersenne primes too? */
+    unsigned i=azarify_hash_string(needle, start, end) % azarify_hash_buckets;
+    
+    while (azarify_hash_keys[i])
+    {
+        if (!strncmp(&needle[start], azarify_hash_keys[i], end-start))
+            return azarify_hash_values[i];
+        else
+            i++;
+    }
+    
+    return NULL;
+}
 
 void azarify_process_buffer(char *buf, size_t n)
 {
@@ -36,6 +66,15 @@ void azarify_process_buffer(char *buf, size_t n)
     
     memcpy(buf,out,n);
     free(out);
+}
+
+int main()
+{
+    const char *p=azarify_hash_lookup_value("Hello",0,4);
+    if (p)
+    {
+        printf("%s\n", p);
+    }
 }
 
 ]]
@@ -133,6 +172,8 @@ function generation()
     
     -- Spewing C
     return [[
+static uint64_t azarify_hash_a = ]]..hash_a..[[;
+static uint64_t azarify_hash_p = ]]..hash_p..[[;
 static unsigned azarify_hash_buckets = ]]..hash_buckets..[[;
 static const char* azarify_hash_keys[] = {
     ]]..keys..[[ 
