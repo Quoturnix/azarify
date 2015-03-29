@@ -10,6 +10,13 @@ rulefile="anglofrench"
 instream=io.stdin
 outstream=io.stdout
 
+-- Hashing parameters
+-- TODO: seed the RNG
+-- TODO: I hereby promise to study the theory 
+-- and improve hashing function after 1st april
+hash_p=524287 -- Mersenne prime 2^19-1
+hash_a=math.random(0, hash_p-1)
+
 -- Output code templates
 codetempl_header=[[
 /* THIS FILE IS GENERATED AUTOMATICALLY BY AZARIFY AND NOT INTENDED FOR MANUAL MODIFICATION
@@ -22,27 +29,27 @@ codetempl_header=[[
 ]]
 
 codetemp_footer=[[
-/* TODO: only basic Latin and apostrophe supported so far */
-static size_t lettertrans(char c)
-{
-    if (c=='\'')
-        return 1;
-    if (c>='A' && c<='Z')
-        return (size_t)(c-'A');
-    if (c>='a' && c<='z')
-        return (size_t)(c-'a');
-    return 0;
-}
 
 void azarify_process_buffer(char *buf, size_t n)
 {
     char *out=malloc(n);
     
-    memcpy(buf,out,n)
+    memcpy(buf,out,n);
     free(out);
 }
 
 ]]
+
+-- Sting hashing, the hash is calculated right-to-left. Because:
+-- a. Allows to calculate the endings hash incrementally
+-- b. Hebrew is written this way and Jews are smart
+function strhash(str)
+    local h=string.byte(string.sub(str, string.len(str), string.len(str)))
+    for i=string.len(str)-1, 1, -1 do
+        h = ((h*hash_a)+string.byte(string.sub(str,i,i))) % hash_p
+    end
+    return h
+end
 
 -- Processing mode
 function processing(instring)
@@ -80,8 +87,63 @@ function processing(instring)
     end), (words_replaced/words_number), words_stat
 end
 
--- Generation mode
+function tablelength(table)
+    local count = 0
+    for _ in pairs(table) do
+        count = count + 1
+    end
+    return count
+end
+
+-- Generates a C hashtable from either of given tables
 function generation()
+    -- Setting up draft table
+    local proto={}
+    local hash_buckets=4*(tablelength(words)+tablelength(endings)) -- See https://xkcd.com/221/ for discussion "Why 4?"
+    local keys=""
+    local values=""
+    local flags=""
+    
+    -- Calculating hashes, probing
+    local function do_table(table)
+        for k,v in pairs(table) do
+            local h=strhash(k) % hash_buckets
+            -- Linear probing atm
+            while proto[h] do
+                h = (h + 1) % hash_buckets            
+            end
+            proto[h]={ k, v, table==endings } -- Ultra black magic, don't do this in production
+        end
+    end
+    do_table(words)
+    do_table(endings)
+    
+    -- Final render into lists of strings/pointers
+    for i=0,hash_buckets-1 do
+        if proto[i] then 
+            keys = keys .. '"'.. proto[i][1] .. '", '
+            values = values .. '"'.. proto[i][2] .. '", '
+            flags = flags .. (proto[i][3] and 1 or 0) .. ', '
+        else
+            keys = keys .. "NULL, "
+            values = values .. "NULL, "
+            flags = flags .. '0, '
+        end
+    end
+    
+    -- Spewing C
+    return [[
+static unsigned azarify_hash_buckets = ]]..hash_buckets..[[;
+static const char* azarify_hash_keys[] = {
+    ]]..keys..[[ 
+};
+static const char* azarify_hash_values[] = {
+    ]]..values..[[ 
+};
+static short azarify_hash_flags[] = {
+    ]]..flags..[[
+};
+]]
 end
 
 -- Analyze params
@@ -147,14 +209,14 @@ if operation_mode=='p' then
         fp:close()
     end
 else
-    outstream:write(codetempl_header..codetemp_footer)    
+    outstream:write(codetempl_header..generation()..codetemp_footer)    
 end
 
 -- Close streams if necessary
 if infile then
-    infile:close()
+    instream:close()
 end
 
 if outfile then
-    outfile:close()
+    outstream:close()
 end

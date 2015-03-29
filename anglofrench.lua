@@ -91,6 +91,7 @@ words = {
     ["you're"]="vous êtes",
     everything="toute chose",
     indeed="en effet",
+    red="rouge",
     
     -- Stoplist, those words are protected against endings substitutions
     being="being",
@@ -104,6 +105,7 @@ words = {
 endings = { 
     ed="é",
     er="eur",
+    ers="eurs",
     ness="ité",
     dom="té",
     cy="nce",
