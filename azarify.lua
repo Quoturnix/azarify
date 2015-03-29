@@ -32,26 +32,20 @@ codetempl_header=[[
 
 codetemp_footer=[[
 
-static uint64_t azarify_hash_string(const char *buf, size_t start, size_t end)
+static uint64_t azarify_hash_iteration(uint64_t h, char c)
 {
     /* TODO: Mersenne prime fast modulo */
-    uint64_t h=buf[end];
-    size_t i;
-    
-    for (i=start+1; i<=end; i++)
-        h=(h*azarify_hash_a + buf[end-i]) % azarify_hash_p;
-    
-    return h;
+    return (h*azarify_hash_a + c) % azarify_hash_p;
 }
 
-static const char* azarify_hash_lookup_value(const char *needle, size_t start, size_t end)
+static const char* azarify_hash_lookup_value(const char *needle, uint64_t hash, size_t start, size_t end, short ending)
 {
     /* TODO: Maybe select the buckets size from Mersenne primes too? */
-    unsigned i=azarify_hash_string(needle, start, end) % azarify_hash_buckets;
+    unsigned i=hash % azarify_hash_buckets;
     
     while (azarify_hash_keys[i])
     {
-        if (!strncmp(&needle[start], azarify_hash_keys[i], end-start))
+        if (azarify_hash_flags[i] == ending && !strncmp(&needle[start], azarify_hash_keys[i], end-start))
             return azarify_hash_values[i];
         else
             i++;
@@ -60,21 +54,92 @@ static const char* azarify_hash_lookup_value(const char *needle, size_t start, s
     return NULL;
 }
 
+/* TODO: expand the scope here and in Lua code to cover more than basic Latin */
+#define azarify_is_alpha(c) (c=='\'' || ( c>='A' && c<='Z') || ( c>='a' && c<='z'))
+
+/* TODO: this code is ABSOLUTELY messy, I'll fix all possible buffer size options when I wake up */
 void azarify_process_buffer(char *buf, size_t n)
 {
-    char *out=malloc(n);
+    char *buf_copy=malloc(n);
+    size_t ianchor=0, oanchor=0, i, j;
+    short matching=0;
     
-    memcpy(buf,out,n);
-    free(out);
+    memcpy(buf_copy, buf, n);
+    
+    for (i=0; ; i++)
+    {
+        /* We're at the start of a new word, copy the interword chars and start matching */
+        if (!matching && ( i==n || azarify_is_alpha(buf_copy[i])) )
+        {
+            if (i > ianchor)
+                memcpy(&buf[oanchor], &buf_copy[ianchor], i-ianchor);
+            oanchor+=i-ianchor;
+            ianchor=i;
+            matching=1;    
+        } 
+        /* We're at the end of a new word, find out if we have the word or the endings in our table */
+        else if (matching && ( i == n || !azarify_is_alpha(buf_copy[i])))
+        {
+            const char *longest_match=NULL;
+            size_t longest=0;
+            uint64_t h;
+            
+            /* Iteratively calculate hash from the end of the word, looking each sequence up
+             * until we end up with the whole word */
+            for (j=0; j < i-ianchor; j++)
+            {
+                if (j==0) h=buf_copy[i-1];
+                else h=azarify_hash_iteration(h, buf_copy[i-j-1]);
+                
+                const char *p=azarify_hash_lookup_value(buf_copy, h, i-j-1, i-1, i-j-1 != ianchor);
+                if (p)
+                {
+                    longest_match=p;
+                    longest=j+1;
+                }
+            }
+            
+            /* Check if we have any match, paste new word */
+            if (longest_match)
+            {
+                /* Copy the first part of the word if needed */
+                if (longest < i-ianchor)
+                {
+                    memcpy(&buf[oanchor], &buf_copy[ianchor], (i-ianchor)-longest);
+                    oanchor+=(i-ianchor)-longest;
+                }
+                strcpy(&buf[oanchor], longest_match);
+                oanchor+=strlen(longest_match);
+            }
+            /* Just copy the characters if not */
+            else
+            {
+                /* TODO: Merge with above code */
+                if (i > ianchor)
+                    memcpy(&buf[oanchor], &buf_copy[ianchor], i-ianchor);
+                oanchor+=i-ianchor;
+            }
+            ianchor=i;
+            matching=0;
+        }
+        
+        /* If the symbol was string's end, terminate process */
+        if (!buf_copy[i] || i==n)
+            break;
+    }
+    
+    /* Make sure the string is zero-terminated */
+    buf[oanchor]=0;
+    
+    free(buf_copy);
 }
 
 int main()
 {
-    const char *p=azarify_hash_lookup_value("Hello",0,4);
-    if (p)
-    {
-        printf("%s\n", p);
-    }
+    char buf[4096] = "Hello, my name is John, I worked at GitHub";
+    printf("Before:\t%s\n",buf);
+    azarify_process_buffer(buf, 4096);
+    printf("After:\t%s\n",buf);
 }
 
 ]]
