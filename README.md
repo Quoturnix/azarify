@@ -26,4 +26,20 @@ meaning in `-g` mode;
 refer to the default `anglofrench.lua` for an template;
 * If input and/or output are not specified, standard input/output streams are assumed;
 
-Note: at the time of writing nothing of that works xD
+## Using the glue code
+
+Include the header `azarify.h` in your C code and link with the source produced with `azarify -g`. The library
+provides 2 functions for substituting the words in either a fixed-length buffer or inside a dynamically sized 
+NULL-terminated string, which is reallocated in case the overall length is changed.
+
+## What's about the name?
+
+The prject was concieved as a way to demonstrate the phenomenon of Azarivka (Азарівка) to English speakers. 
+[Nikolay Azarov][1] is an ex-PM of Ukraine who had trouble with the language and usually just naively transformed
+the Russian words so that they seem Ukrainian, most notably changing vowels to «і» at unusual places, leading
+to absolutely hilarious results to a person who is both a Russian and Ukrainian speaker. Kolya, please return
+home. We miss you (No, we don't).
+
+![Azarov](http://24daily.net/wp-content/uploads/2013/12/azarov22.jpg "Николай Азаров")
+
+[1]: http://en.wikipedia.org/wiki/Mykola_Azarov
