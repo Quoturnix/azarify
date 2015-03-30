@@ -83,17 +83,8 @@ static char* azarify_process(const char *buf, size_t n)
     
     for (i=0; ; i++)
     {
-        /* We're at the start of a new word, copy the interword chars and start matching */
-        if (!matching && ( i==n || azarify_is_alpha(buf[i])) )
-        {
-            if (i > ianchor)
-                outbuf=azarify_smart_memcpy(outbuf, &buf[ianchor],
-                                     &oanchor, &buf_size, i-ianchor, n/2);
-            ianchor=i;
-            matching=1;    
-        } 
         /* We're at the end of a new word, find out if we have the word or the endings in our table */
-        if (matching && ( i == n || !azarify_is_alpha(buf[i])))
+        if (matching && ( i == n || !buf[i] || !azarify_is_alpha(buf[i])))
         {
             const char *longest_match=NULL;
             size_t longest=0;
@@ -129,12 +120,22 @@ static char* azarify_process(const char *buf, size_t n)
             matching=0;
         }
         
+        /* We're at the start of a new word, copy the interword chars and start matching */
+        if (!matching && ( i==n || !buf[i] || azarify_is_alpha(buf[i])) )
+        {
+            if (i > ianchor)
+                outbuf=azarify_smart_memcpy(outbuf, &buf[ianchor],
+                                     &oanchor, &buf_size, i-ianchor, n/2);
+            ianchor=i;
+            matching=1;    
+        } 
+        
         /* If the symbol was string's end, terminate process */
         if (!buf[i] || i==n)
             break;
     }
     
-    /* Make sure the string is zero-terminated */
+    /* Make sure the string is zero-terminated */    
     outbuf[oanchor]='\0';
     
     return outbuf;
@@ -145,6 +146,7 @@ void azarify_process_buffer(char *buf, size_t n)
     char *outbuf=azarify_process(buf, n);
     memcpy(buf, outbuf, n);
     buf[n-1]='\0';
+    
     free(outbuf);
 }
 
