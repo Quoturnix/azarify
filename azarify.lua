@@ -26,7 +26,6 @@ codetempl_header=[[
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdio.h>
 
 ]]
 
