@@ -56,13 +56,20 @@ static const char* azarify_hash_lookup_value(const char *needle, uint64_t hash, 
 
 /* TODO: expand the scope here and in Lua code to cover more than basic Latin */
 #define azarify_is_alpha(c) (c=='\'' || ( c>='A' && c<='Z') || ( c>='a' && c<='z'))
+#define min(x,y) ((x)<(y)?(x):(y))
+                 
+static short careful_memcpy(char *dst, const char *src, size_t n, size_t l)
+{
+    memcpy(dst, src, min(n, l));
+    return l<=n;
+}
 
-/* TODO: this code is ABSOLUTELY messy, I'll fix all possible buffer size options when I wake up */
 void azarify_process_buffer(char *buf, size_t n)
 {
     char *buf_copy=malloc(n);
     size_t ianchor=0, oanchor=0, i, j;
     short matching=0;
+    short stop=0;
     
     memcpy(buf_copy, buf, n);
     
@@ -72,13 +79,15 @@ void azarify_process_buffer(char *buf, size_t n)
         if (!matching && ( i==n || azarify_is_alpha(buf_copy[i])) )
         {
             if (i > ianchor)
-                memcpy(&buf[oanchor], &buf_copy[ianchor], i-ianchor);
+                if (!careful_memcpy(&buf[oanchor], &buf_copy[ianchor], n-oanchor, i-ianchor))
+                    stop=1;
             oanchor+=i-ianchor;
+            if (stop) break;
             ianchor=i;
             matching=1;    
         } 
         /* We're at the end of a new word, find out if we have the word or the endings in our table */
-        else if (matching && ( i == n || !azarify_is_alpha(buf_copy[i])))
+        if (matching && ( i == n || !azarify_is_alpha(buf_copy[i])))
         {
             const char *longest_match=NULL;
             size_t longest=0;
@@ -105,21 +114,17 @@ void azarify_process_buffer(char *buf, size_t n)
                 /* Copy the first part of the word if needed */
                 if (longest < i-ianchor)
                 {
-                    memcpy(&buf[oanchor], &buf_copy[ianchor], (i-ianchor)-longest);
+                    if (!careful_memcpy(&buf[oanchor], &buf_copy[ianchor], n-oanchor, (i-ianchor)-longest))
+                        stop=1;
                     oanchor+=(i-ianchor)-longest;
+                    if (stop) break;
                 }
-                strcpy(&buf[oanchor], longest_match);
+                if (!careful_memcpy(&buf[oanchor], longest_match, n-oanchor, strlen(longest_match)))
+                    stop=1;
                 oanchor+=strlen(longest_match);
+                if (stop) break;
+                ianchor=i;
             }
-            /* Just copy the characters if not */
-            else
-            {
-                /* TODO: Merge with above code */
-                if (i > ianchor)
-                    memcpy(&buf[oanchor], &buf_copy[ianchor], i-ianchor);
-                oanchor+=i-ianchor;
-            }
-            ianchor=i;
             matching=0;
         }
         
@@ -136,9 +141,9 @@ void azarify_process_buffer(char *buf, size_t n)
 
 int main()
 {
-    char buf[4096] = "Hello, my name is John, I worked at GitHub";
+    char buf[45] = "Hello, my name is John, I worked at GitHub";
     printf("Before:\t%s\n",buf);
-    azarify_process_buffer(buf, 4096);
+    azarify_process_buffer(buf, 35);
     printf("After:\t%s\n",buf);
 }
 
