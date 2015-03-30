@@ -56,38 +56,45 @@ static const char* azarify_hash_lookup_value(const char *needle, uint64_t hash, 
 
 /* TODO: expand the scope here and in Lua code to cover more than basic Latin */
 #define azarify_is_alpha(c) (c=='\'' || ( c>='A' && c<='Z') || ( c>='a' && c<='z'))
-#define min(x,y) ((x)<(y)?(x):(y))
-                 
-static short careful_memcpy(char *dst, const char *src, size_t n, size_t l)
+#define max(x,y) ((x)>(y)?(x):(y))
+
+static char* azarify_smart_memcpy(char *dst, const char *src, size_t *anchor, size_t *capacity, size_t len, size_t incr)
 {
-    memcpy(dst, src, min(n, l));
-    return l<=n;
+    char *new_dst=dst;
+    if (*capacity < *anchor + len) 
+    {
+        *capacity += max(incr, len);
+        new_dst=realloc(dst, *capacity);
+    }
+    
+    memcpy(&dst[*anchor], src, len);
+    *anchor+=len;
+    
+    return new_dst;
 }
 
-void azarify_process_buffer(char *buf, size_t n)
+/* TODO: more efficient buffer version that would stop at boundary rather than make a large buffer and truncate
+ * TODO: allocation strategies */
+static char* azarify_process(const char *buf, size_t n)
 {
-    char *buf_copy=malloc(n);
+    char *outbuf=malloc(n);
     size_t ianchor=0, oanchor=0, i, j;
-    short matching=0;
-    short stop=0;
-    
-    memcpy(buf_copy, buf, n);
+    size_t buf_size=n;
+    short matching=0; 
     
     for (i=0; ; i++)
     {
         /* We're at the start of a new word, copy the interword chars and start matching */
-        if (!matching && ( i==n || azarify_is_alpha(buf_copy[i])) )
+        if (!matching && ( i==n || azarify_is_alpha(buf[i])) )
         {
             if (i > ianchor)
-                if (!careful_memcpy(&buf[oanchor], &buf_copy[ianchor], n-oanchor, i-ianchor))
-                    stop=1;
-            oanchor+=i-ianchor;
-            if (stop) break;
+                outbuf=azarify_smart_memcpy(outbuf, &buf[ianchor],
+                                     &oanchor, &buf_size, i-ianchor, n/2);
             ianchor=i;
             matching=1;    
         } 
         /* We're at the end of a new word, find out if we have the word or the endings in our table */
-        if (matching && ( i == n || !azarify_is_alpha(buf_copy[i])))
+        if (matching && ( i == n || !azarify_is_alpha(buf[i])))
         {
             const char *longest_match=NULL;
             size_t longest=0;
@@ -97,10 +104,10 @@ void azarify_process_buffer(char *buf, size_t n)
              * until we end up with the whole word */
             for (j=0; j < i-ianchor; j++)
             {
-                if (j==0) h=buf_copy[i-1];
-                else h=azarify_hash_iteration(h, buf_copy[i-j-1]);
+                if (j==0) h=buf[i-1];
+                else h=azarify_hash_iteration(h, buf[i-j-1]);
                 
-                const char *p=azarify_hash_lookup_value(buf_copy, h, i-j-1, i-1, i-j-1 != ianchor);
+                const char *p=azarify_hash_lookup_value(buf, h, i-j-1, i-1, i-j-1 != ianchor);
                 if (p)
                 {
                     longest_match=p;
@@ -113,38 +120,45 @@ void azarify_process_buffer(char *buf, size_t n)
             {
                 /* Copy the first part of the word if needed */
                 if (longest < i-ianchor)
-                {
-                    if (!careful_memcpy(&buf[oanchor], &buf_copy[ianchor], n-oanchor, (i-ianchor)-longest))
-                        stop=1;
-                    oanchor+=(i-ianchor)-longest;
-                    if (stop) break;
-                }
-                if (!careful_memcpy(&buf[oanchor], longest_match, n-oanchor, strlen(longest_match)))
-                    stop=1;
-                oanchor+=strlen(longest_match);
-                if (stop) break;
+                    outbuf=azarify_smart_memcpy(outbuf, &buf[ianchor],
+                                     &oanchor, &buf_size, (i-ianchor)-longest, n/2);
+                    
+                outbuf=azarify_smart_memcpy(outbuf, longest_match,
+                                     &oanchor, &buf_size, strlen(longest_match), n/2); 
                 ianchor=i;
             }
             matching=0;
         }
         
         /* If the symbol was string's end, terminate process */
-        if (!buf_copy[i] || i==n)
+        if (!buf[i] || i==n)
             break;
     }
     
     /* Make sure the string is zero-terminated */
-    buf[oanchor]=0;
+    outbuf[oanchor]='\0';
     
-    free(buf_copy);
+    return outbuf;
 }
 
-int main()
+void azarify_process_buffer(char *buf, size_t n)
 {
-    char buf[45] = "Hello, my name is John, I worked at GitHub";
-    printf("Before:\t%s\n",buf);
-    azarify_process_buffer(buf, 35);
-    printf("After:\t%s\n",buf);
+    char *outbuf=azarify_process(buf, n);
+    memcpy(buf, outbuf, n);
+    buf[n-1]='\0';
+    free(outbuf);
+}
+
+char *azarify_process_string(char *str, size_t *n)
+{
+    char *outbuf=azarify_process(str, strlen(str));
+    size_t _n=strlen(outbuf)+1;
+    char *newstr=realloc(str, _n);
+    memcpy(newstr, outbuf, _n);
+    if (n)
+        *n=_n;
+    free(outbuf);
+    return newstr;
 }
 
 ]]
